@@ -1,3 +1,6 @@
+# IMPORTANT: Ignore the data directory, we are not trying to upload student code just the grader
+data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
