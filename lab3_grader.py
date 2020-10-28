@@ -26,12 +26,15 @@ for fpath in Path("data/lab3/").glob("*.py"):
 
     print("------------------------- [Problem 1] ArrayList (40pts)")
     problem1_total = lab3_problem1.grade_problem(lab3_source)
+    print()
 
     print("------------------------- [Problem 2] Circular Shift (40pts)")
     problem2_total = lab3_problem2.grade_problem(lab3_source)
+    print()
 
     print("------------------------- [Problem 3] One Edit Away (20pts)")
     problem3_total = lab3_problem3.grade_problem(lab3_source)
+    print()
 
     print("------------------------- Overall Grades")
     print(f"--==> Problem 1={problem1_total}/40pts")

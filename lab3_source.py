@@ -21,6 +21,7 @@ class ArrayList:
 
     # TODO: Implement this method - Required Time Complexity: O(1)
     def __getitem__(self, idx):
+        print("IDX is", idx, type(idx))
         """Implements 'value = self[idx]'
         Raises IndexError if idx is invalid."""
         raise NotImplementedError("Not running student code")
