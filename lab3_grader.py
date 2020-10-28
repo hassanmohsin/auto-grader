@@ -1,8 +1,11 @@
+import sys
 from pathlib import Path
 
 import lab3_problem1
 import lab3_problem2
 import lab3_problem3
+
+csv_table = open('lab3.csv', 'w')
 
 for fpath in Path("data/lab3/").glob("*.py"):
     # Import and replace the current lab 3 source
@@ -14,6 +17,10 @@ for fpath in Path("data/lab3/").glob("*.py"):
         exec(f"from data.lab3 import {fpath.stem} as lab3_source")
     except Exception as ex:
         import_exception = ex
+
+    orig_stdout = sys.stdout
+    f = open(fpath.stem + ".txt", 'w')
+    sys.stdout = f
 
     print("")
     print(">> AutoGrader v1.0 by Jose G. Perez (TA)")
@@ -42,4 +49,8 @@ for fpath in Path("data/lab3/").glob("*.py"):
     print(f"--==> Problem 3={problem3_total}/20pts")
     print(f"--==> Total={problem1_total + problem2_total + problem3_total}/100pts")
 
-    input("> Waiting to go to next student")
+    sys.stdout = orig_stdout
+    f.close()
+
+    csv_table.write(f'{fpath.stem},{problem1_total},{problem2_total},{problem3_total}\n')
+csv_table.close()
