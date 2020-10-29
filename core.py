@@ -4,6 +4,7 @@ import sys
 import big_o
 
 
+# From https://github.com/pberkes/persistent_locals
 class PersistentLocals(object):
     def __init__(self, func):
         self._locals = {}
