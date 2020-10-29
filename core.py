@@ -33,6 +33,7 @@ class PersistentLocals(object):
 
 
 def auto_grade_lab(student_code_dir, lab_str, problem_dict):
+    print(f"[Debug] Auto-Grading {lab_str}")
     # We will store the scores in a table per problem
     csv_table = open(f'{lab_str}.csv', 'w')
 
@@ -59,7 +60,7 @@ def auto_grade_lab(student_code_dir, lab_str, problem_dict):
         f = open(lab_str + "_" + fpath.stem + ".bbtxt", 'w')
         sys.stdout = f
 
-        print(">> AutoGrader v1.1 by Jose G. Perez (TA)")
+        print(">> AutoGrader v1.1 by Jose G. Perez (Teaching Assistant) <jperez50@miners.utep.edu>")
         print(f">> Assignment: {lab_str}")
         print(f">> Student: {fpath.stem}")
 
@@ -88,6 +89,7 @@ def auto_grade_lab(student_code_dir, lab_str, problem_dict):
         csv_table.write('\n')
 
     csv_table.close()
+    print(f"[Debug] Done Auto-Grading!")
 
 
 def auto_grade_constant_space(max_space_points, func, *params):

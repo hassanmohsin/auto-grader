@@ -1,5 +1,6 @@
 # IMPORTANT: Ignore the data directory, we are not trying to upload student code just the grader
-data/
+_data_/
+*/data/*
 *.csv
 *.bbtxt
 
