@@ -1,3 +1,4 @@
+import pathlib
 import sys
 
 import big_o
@@ -29,6 +30,64 @@ class PersistentLocals(object):
     @property
     def locals(self):
         return self._locals
+
+
+def auto_grade_lab(student_code_dir, lab_str, problem_dict):
+    # We will store the scores in a table per problem
+    csv_table = open(f'{lab_str}.csv', 'w')
+
+    if type(student_code_dir) == str:
+        student_code_dir = pathlib.Path(student_code_dir)
+
+    for fpath in student_code_dir.glob("*.py"):
+        # Import and replace the current lab source
+        exec(f"lab_source = None")
+
+        import_exception = False
+        module_path = str(fpath).replace('\\', '.').replace('.py', '')
+
+        # Silence print()
+        orig_stdout = sys.stdout
+        sys.stdout = None
+        try:
+            module = __import__(module_path)
+            exec(f"from data import {fpath.stem} as lab_source")
+        except Exception as ex:
+            import_exception = ex
+
+        # Redirect print() to a file
+        f = open(lab_str + "_" + fpath.stem + ".bbtxt", 'w')
+        sys.stdout = f
+
+        print(">> AutoGrader v1.1 by Jose G. Perez (TA)")
+        print(f">> Assignment: {lab_str}")
+        print(f">> Student: {fpath.stem}")
+
+        if import_exception:
+            print(">> There was an exception thrown by a cell while trying to import. Run all your cells next time to make sure no exceptions are thrown.")
+            print(">> Exception: ", repr(import_exception))
+
+        totals = []
+        for idx, (problem_str, (problem_max_points, problem_grade_func)) in enumerate(problem_dict.items()):
+            print(f"------------------------- [Problem {idx + 1}] {problem_str} ({problem_max_points}pts)")
+            exec(f"totals.append(problem_grade_func(lab_source))")
+            print()
+
+        print("------------------------- Overall Grades")
+        for idx, (problem_str, (problem_max_points, problem_grade_func)) in enumerate(problem_dict.items()):
+            print(f"--==> Problem {idx + 1}={totals[idx]}/{problem_max_points}pts")
+
+        print(f"--==> Total={sum(totals)}/100pts")
+
+        sys.stdout = orig_stdout
+        f.close()
+
+        csv_table.write(f'{fpath.stem},')
+        for total in totals:
+            csv_table.write(f'{total},')
+        csv_table.write('\n')
+
+    csv_table.close()
 
 
 def auto_grade_constant_space(max_space_points, func, *params):
@@ -83,7 +142,7 @@ def auto_grade_time_complexity(measure_func, data_gen_func, max_time_points, cor
                     correct_time_coeff = coeff
 
             # If the measured time is close to the correct time, count it as correct
-            if abs(best_time_coeff - correct_time_coeff) < 0.01:
+            if abs(best_time_coeff - correct_time_coeff) <= 1e-10:
                 best_time = correct_time_type.__name__
                 time_complexity_grade = max_time_points
             else:
@@ -125,3 +184,43 @@ def auto_grade_test_cases(problem, description, max_points, max_test_case_points
         print(f"An exception was thrown by the student's lab: {repr(ex)}. This might affect the final score.")
         print(f"=> TA Test Cases: 0/{max_test_case_points}pts, passed 0 of the test cases due to an exception.")
         return 0
+
+
+def silent_print(*str):
+    old_stdout = sys.stdout
+    sys.stdout = None
+    print(str)
+    sys.stdout = old_stdout
+
+
+# Test automatic time complexity grading
+if __name__ == '__main__':
+    def gen_n(n):
+        return int(n)
+
+
+    def constant_time(n):
+        return 0
+
+
+    def linear_time(n):
+        for i in range(n):
+            silent_print(n)
+
+
+    def quadratic_time(n):
+        for i in range(n):
+            for j in range(n):
+                silent_print(i, j)
+
+
+    print("Should all be constant")
+    auto_grade_time_complexity(measure_func=constant_time, data_gen_func=gen_n, max_time_points=15, correct_time_type=big_o.complexities.Constant)
+
+    print("Should all be linear")
+    auto_grade_time_complexity(measure_func=linear_time, data_gen_func=gen_n, max_time_points=15, correct_time_type=big_o.complexities.Linear)
+    auto_grade_time_complexity(measure_func=linear_time, data_gen_func=gen_n, max_time_points=15, correct_time_type=big_o.complexities.Quadratic)
+    auto_grade_time_complexity(measure_func=linear_time, data_gen_func=gen_n, max_time_points=15, correct_time_type=big_o.complexities.Constant)
+
+    print("Should be quadratic")
+    auto_grade_time_complexity(measure_func=quadratic_time, data_gen_func=gen_n, max_time_points=15, correct_time_type=big_o.complexities.Quadratic)
