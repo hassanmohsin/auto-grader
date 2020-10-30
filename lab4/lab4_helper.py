@@ -35,14 +35,32 @@ class AVLTree:
             self.right = right
             self.parent = parent
 
-            self.item = data
-            self.l_child = left
-            self.r_child = right
-            self.key = data
             # used to balance the tree: balance = height(left subtree) - height(right subtree)
             # tree at node is balanced if the value is in [-1, 0, 1], else it is unbalanced
             self.balance = balance
             return
+
+        @property
+        def l_child(self):
+            return self.left
+
+        @property
+        def r_child(self):
+            return self.right
+
+        @property
+        def item(self):
+            return self.data
+
+        @property
+        def key(self):
+            return self.data
+
+        def __str__(self):
+            return f"(AVLNode({self.data}))"
+
+        def __repr__(self):
+            return self.__str__()
 
     def __init__(self):
         self._root = None
@@ -179,8 +197,8 @@ class AVLTree:
         """
 
         # no duplicates in the tree
-        if (data == node.data):
-            return
+        # if (data == node.data):
+        #     return
 
         if data < node.data:
             if node.left:

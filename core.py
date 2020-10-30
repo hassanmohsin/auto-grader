@@ -33,6 +33,25 @@ class PersistentLocals(object):
         return self._locals
 
 
+def grade_test_case_helper(test_number, source_func, source_params, expected_value, extra_info="None"):
+    try:
+        result = source_func(*source_params)
+    except Exception as ex:
+        result = ex
+
+    passed = (result == expected_value)
+
+    if type(result) == float:
+        passed = abs(result - expected_value) < 0.1
+
+    passed_str = "Passed" if passed else "Failed"
+
+    if not passed:
+        print(f"Test {test_number} {passed_str} | {source_func.__name__}({source_params})={result} | Expected {expected_value} | Extra Info: {extra_info}")
+
+    return passed
+
+
 def auto_grade_lab(student_code_dir, lab_str, problem_dict):
     print(f"[Debug] Auto-Grading {lab_str}")
     # We will store the scores in a table per problem
@@ -61,7 +80,7 @@ def auto_grade_lab(student_code_dir, lab_str, problem_dict):
         f = open(lab_str + "_" + fpath.stem + ".bbtxt", 'w')
         sys.stdout = f
 
-        print(">> AutoGrader v1.1 by Jose G. Perez (Teaching Assistant) <jperez50@miners.utep.edu>")
+        print(">> AutoGrader v1.2 by Jose G. Perez (Teaching Assistant) <jperez50@miners.utep.edu>")
         print(f">> Assignment: {lab_str}")
         print(f">> Student: {fpath.stem}")
 
@@ -179,7 +198,7 @@ def auto_grade_test_cases(problem, description, max_points, max_test_case_points
         # Let the student know which test cases failed and their test case grade
         print(f"=> TA Test Cases: {total_points:.2f}/{max_test_case_points}, passed {len(passed_tests)} out of {len(test_cases)} test cases.")
         if len(failed_tests) > 0:
-            print(f"Failed Test Cases: {failed_tests}. If you wish to know what exactly failed just email me these numbers and I'll send you the test cases you request.")
+            print(f"Failed Test Cases: {failed_tests}. ")
 
         return total_points
 
