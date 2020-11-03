@@ -5,6 +5,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lab3" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lab4" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lab5" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/data" />
       <excludeFolder url="file://$MODULE_DIR$/data/lab3" />
       <excludeFolder url="file://$MODULE_DIR$/lab3/data" />
@@ -12,8 +13,5 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-  </component>
-  <component name="TestRunnerService">
-    <option name="PROJECT_TEST_RUNNER" value="Unittests" />
   </component>
 </module>

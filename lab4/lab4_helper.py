@@ -66,6 +66,7 @@ class AVLTree:
         self._root = None
         self._depth = None
         self._max_chars = None
+        self._dstr = []
         return
 
     def __str__(self):
@@ -74,44 +75,45 @@ class AVLTree:
         Uses a BFS (level-order) traversal.
         """
         self.synchronizeFields()
-        if (self._depth == 0):
-            return ""
-        s = ""
-        queue = []
-        level = 0
-        queue.append((1, self._root))
-        while len(queue):
-            nodelev, node = queue.pop(0)
-            if (not node):
-                if ((self._depth - nodelev + 1) <= 0):
-                    continue
-                if (nodelev != level):
-                    s += "\n"
-                    s += " " * int((self._max_chars) * (2 ** (self._depth - nodelev) - 1))
-                    level = nodelev
-                s += " " * (self._max_chars) * (2 ** (self._depth - nodelev + 1) - 1)
-                s += " " * self._max_chars
-                queue.append((nodelev + 1, None))
-                queue.append((nodelev + 1, None))
-                continue
-            if (nodelev != level):
-                s += "\n"
-                s += " " * (self._max_chars) * (2 ** (self._depth - nodelev) - 1)
-                level = nodelev
-            for i in range(int(self._max_chars - len(str(node.data)))):
-                s += "|"
-            s += str(node.data)
-            s += " " * (self._max_chars) * (2 ** (self._depth - nodelev + 1) - 1)
-            if node.left:
-                queue.append((nodelev + 1, node.left))
-            else:
-                queue.append((nodelev + 1, None))
-            if node.right:
-                queue.append((nodelev + 1, node.right))
-            else:
-                queue.append((nodelev + 1, None))
-        s += "\n"
-        return s
+        return self.d_str
+        # if (self._depth == 0):
+        #     return ""
+        # s = ""
+        # queue = []
+        # level = 0
+        # queue.append((1, self._root))
+        # while len(queue):
+        #     nodelev, node = queue.pop(0)
+        #     if (not node):
+        #         if ((self._depth - nodelev + 1) <= 0):
+        #             continue
+        #         if (nodelev != level):
+        #             s += "\n"
+        #             s += " " * int((self._max_chars) * (2 ** (self._depth - nodelev) - 1))
+        #             level = nodelev
+        #         s += " " * (self._max_chars) * (2 ** (self._depth - nodelev + 1) - 1)
+        #         s += " " * self._max_chars
+        #         queue.append((nodelev + 1, None))
+        #         queue.append((nodelev + 1, None))
+        #         continue
+        #     if (nodelev != level):
+        #         s += "\n"
+        #         s += " " * (self._max_chars) * (2 ** (self._depth - nodelev) - 1)
+        #         level = nodelev
+        #     for i in range(int(self._max_chars - len(str(node.data)))):
+        #         s += "|"
+        #     s += str(node.data)
+        #     s += " " * (self._max_chars) * (2 ** (self._depth - nodelev + 1) - 1)
+        #     if node.left:
+        #         queue.append((nodelev + 1, node.left))
+        #     else:
+        #         queue.append((nodelev + 1, None))
+        #     if node.right:
+        #         queue.append((nodelev + 1, node.right))
+        #     else:
+        #         queue.append((nodelev + 1, None))
+        # s += "\n"
+        # return s
 
     def synchronizeFields(self):
         """
@@ -164,6 +166,8 @@ class AVLTree:
         """
         Builds the tree by inserting elements from a list in order.
         """
+        self.d_str = l
+
         if (l == None):
             return
         try:
