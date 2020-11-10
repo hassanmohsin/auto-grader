@@ -39,10 +39,23 @@ def grade_test_case_helper(test_number, source_func, source_params, expected_val
     except Exception as ex:
         result = ex
 
-    passed = (result == expected_value)
-
     if type(result) == float:
         passed = abs(result - expected_value) < 0.1
+    elif type(result) == list:
+        passed = True
+        if len(result) != len(expected_value):
+            passed = False
+        else:
+            for result_var, expected_var in zip(result, expected_value):
+                if type(expected_var) == float and abs(result_var - expected_var) > 0.1:
+                    passed = False
+                    break
+                elif "PasswordTuple" in str(type(result_var)) and (result_var.password != expected_var):
+                    passed = False
+                    result = [x.password for x in result]
+                    break
+    else:
+        passed = (result == expected_value)
 
     passed_str = "Passed" if passed else "Failed"
 

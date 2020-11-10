@@ -24,15 +24,15 @@ def grade_problem(lab4_source):
 
         tree3 = TA_AVLTree()
         tree3.insertList([-5, -4, -3, -2, -2, -1, 5, 10])
-        test11 = grade_test_case_helper(test_number=10, source_func=lab4_source.range_sum, source_params=[tree3.getRoot(), 0, 10], expected_value=15, extra_info=f"Tree={str(tree3)}")
-        test12 = grade_test_case_helper(test_number=10, source_func=lab4_source.range_sum, source_params=[tree3.getRoot(), -5, 10], expected_value=-2, extra_info=f"Tree={str(tree3)}")
-        test13 = grade_test_case_helper(test_number=10, source_func=lab4_source.range_sum, source_params=[tree3.getRoot(), -5, -2], expected_value=-16, extra_info=f"Tree={str(tree3)}")
+        test11 = grade_test_case_helper(test_number=11, source_func=lab4_source.range_sum, source_params=[tree3.getRoot(), 0, 10], expected_value=15, extra_info=f"Tree={str(tree3)}")
+        test12 = grade_test_case_helper(test_number=12, source_func=lab4_source.range_sum, source_params=[tree3.getRoot(), -5, 10], expected_value=-2, extra_info=f"Tree={str(tree3)}")
+        test13 = grade_test_case_helper(test_number=13, source_func=lab4_source.range_sum, source_params=[tree3.getRoot(), -5, -2], expected_value=-16, extra_info=f"Tree={str(tree3)}")
 
         tree4 = TA_AVLTree()
         tree4.insertList([0.5, 1, 1.5, 2, 2.5, 3, 3.14, 3.15, 4, 4.28, 5, 6.28])
-        test14 = grade_test_case_helper(test_number=10, source_func=lab4_source.range_sum, source_params=[tree4.getRoot(), 0, 2], expected_value=5, extra_info=f"Tree={str(tree4)}")
-        test15 = grade_test_case_helper(test_number=10, source_func=lab4_source.range_sum, source_params=[tree4.getRoot(), 3, 4], expected_value=13.29, extra_info=f"Tree={str(tree4)}")
-        test16 = grade_test_case_helper(test_number=10, source_func=lab4_source.range_sum, source_params=[tree4.getRoot(), 3.1, 3.5], expected_value=6.29, extra_info=f"Tree={str(tree4)}")
+        test14 = grade_test_case_helper(test_number=14, source_func=lab4_source.range_sum, source_params=[tree4.getRoot(), 0, 2], expected_value=5, extra_info=f"Tree={str(tree4)}")
+        test15 = grade_test_case_helper(test_number=15, source_func=lab4_source.range_sum, source_params=[tree4.getRoot(), 3, 4], expected_value=13.29, extra_info=f"Tree={str(tree4)}")
+        test16 = grade_test_case_helper(test_number=16, source_func=lab4_source.range_sum, source_params=[tree4.getRoot(), 3.1, 3.5], expected_value=6.29, extra_info=f"Tree={str(tree4)}")
 
         return [test1, test2, test3, test4, test5, test6, test7, test8, test9, test10, test11, test12, test13, test14, test15, test16]
 

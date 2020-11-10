@@ -2,7 +2,7 @@ import inspect
 
 from core import *
 
-lookup_table = ['avl', 'red', 'black', 'sg', 'scapegoat', 'aa', 'splay', 'treap']
+lookup_table = ['avl', 'red', 'black', 'sg', 'scapegoat', 'aa', 'splay', 'treap', 'redblack']
 
 
 def grade_problem(lab4_source):
