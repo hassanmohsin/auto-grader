@@ -3,6 +3,11 @@ _data_/
 */data/*
 *.csv
 *.bbtxt
+*.xlsx
+
+# IMPORTANT: Ignore the solutions files
+_solutions_/
+*/solutions/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
