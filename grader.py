@@ -1,13 +1,10 @@
 # Author: Jose G. Perez
 # Requires a Linux machine for the timeout functionality
-# Can only grade functions and class functions
-# Cannot grade class initializers
-# If you want students to see their mistakes more easily implement the __str__() function for your classes
+# TODO: Requires you to clean-up Colab Notebooks by manually removing colab-exclusive imports and getting rid of duplicate class definitions/functions
+# Can only grade standalone functions and class functions
+# Cannot grade class initializers (__init__ functions)
+# TA's, if you want students to see their mistakes more easily implement the __str__() function for your classes
 # TODO: Only parse classes/functions while ignoring loose code
-# TODO: Make it one main decorator
-# TODO: Refactor grading as a class to separate the process into easily read functions
-# TODO: Change parameter generation from single function to separate functions?
-# TODO: Perhaps decorator uses a class with a builder system? If not, use kwargs to generate each individual one
 import sys
 import argparse
 import pathlib
@@ -32,6 +29,7 @@ import wrapt_timeout_decorator
 
 TIMEOUT_S = 0.1  # How many seconds should we allow student functions to run before terminating them
 
+
 def generate_custom_comparer(equality_fn):
     assert callable(equality_fn), 'equality_fn must be a function'
 
@@ -43,6 +41,7 @@ def generate_custom_comparer(equality_fn):
         wrapper.equality_fn = equality_fn
         return wrapper
     return decorator
+
 
 def generate_class(trials_per_instance, **class_kwargs):
     assert type(trials_per_instance) == int, 'trials_per_instance must be an int'
@@ -66,7 +65,8 @@ def generate_class(trials_per_instance, **class_kwargs):
         return wrapper
     return decorator
 
-def generate_parameters(trials=5000, **fn_kwargs):
+
+def generate_test_case(trials=5000, **fn_kwargs):
     assert type(trials) == int, 'trials must be an int'
     assert trials > 0, 'trials must be positive'
     for k_name, k_fn in fn_kwargs.items():
@@ -89,132 +89,40 @@ def generate_parameters(trials=5000, **fn_kwargs):
         return wrapper
     return decorator
 
-# class CustomGraderBuilder:
-#     def __init__(self, equality_fn):
-        
-        # self.equality_fn = equality_fn
-
-
-# class ClassBuilder:
-#     def __init__(self, trials_per_instance):
-#         '''Takes in functions to build all the constructor parameters'''
-        
-#         # assert trials_per_instance < self.max_trials, 'trials_per_instance must be lower than max_trials'
-
-#         self.trials_per_instance = trials_per_instance
-#         self.class_kwargs = {}
-
-#     def build_init_params(self, **class_kwargs):
-
-
-#         self.class_kwargs = class_kwargs
-#         return self
-
-
-
-
-# class TestCaseBuilder:
-#     def __init__(self, trials=5000):
-
-
-#         self.max_trials = trials
-#         self.funct_kwargs = {}
-
-#     # def build_class(self, trials_per_instance, **class_kwargs):
-
-#     #     self.is_class = True
-#     #     self.trials_per_instance = trials_per_instance
-
-#     #     self.class_kwargs = class_kwargs
-#     #     return self
-
-#     def build_fn_params(self, **funct_kwargs):
-#         '''Takes in functions to build test case function parameters'''
-#         self.funct_kwargs = funct_kwargs
-
-
-#         return self
-
-
-
-    # def __set_modules__(self, funct_name, solution_module, student_module):
-    #     self.solution_module = solution_module
-    #     self.student_module = student_module
-
-    #     if self.is_class:
-    #         self.student_fn = getattr(student_module, funct_name)
-
-    # def __len__(self):
-    #     return self.max_trials - self.curr_trials
-
-    # def __next__(self):
-    #     # Check if we need to generate a new class instance
-    #     if self.is_class and self.curr_trials % self.trials_per_instance == 0:
-    #         solution_instance = create_class_instance(constructor_fn = classes_function_dict[funct_name], class_init_params = class_init_params)
-    #         student_instance = try_student_fn(create_class_instance, None, args = (student_classes_function_dict[funct_name], class_init_params))
-    #     #         student_test_case = copy.deepcopy(real_test_case)
-
-    #     # # IMPORTANT! Both classes must be initialized with the same parameters
-    #     # class_init_params = funct.meta['class_init_param_fn']()
-    #     #
-
-    #     # sys.stdout = None
-    #     #
-    #     # sys.stdout = orig_stdout
-
-    # @grader.generate_class_test_cases(
-    #     param_gen_fn = lambda: (np.random.randint(0, 9), np.random.randint(0, 9)),
-    #     class_init_param_fn = lambda: str(np.random.choice(easy_lines, 1)[0]),
-    #     equality_fn = lambda sudoku1, sudoku2, ret1, ret2: grader.compare_solutions(set(ret1), set(ret2)),
-    #     trials=1000,
-    # )
-
-
-# def generate_test_cases(*args):
-#     meta = {'no_test_cases': False,
-#             'class_builder': None,
-#             }
-#     for k in args:
-#         assert isinstance(k, (TestCaseBuilder, ClassBuilder)), f'Variable {k} must be a builder'
-
-#         if isinstance(k, TestCaseBuilder):
-#             meta['test_case_builder'] = k
-#         elif isinstance(k, ClassBuilder):
-#             meta['class_builder'] = k
-
-#     # if type(param_gen_fn) is list:
-#     #     test_cases = param_gen_fn
-#     # elif callable(param_gen_fn):
-#     #     test_cases = []
-#     #     for _ in range(trials):
-#     #         test_cases.append(param_gen_fn())
-#     # else:
-#     #     raise Exception('param_gen_fn must be a list of test cases or a function')
-
-#     def decorator(func):
-#         def wrapper(*args, **kwargs):
-#             return func(*args, **kwargs)
-#         wrapper.meta = meta
-#         return wrapper
-#     return decorator
-
 
 def no_test_cases():
     def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
         wrapper.no_test_cases = True
         return wrapper
     return decorator
 
+class StudentCodeException(Exception):
+    pass
+
+class StudentTimeoutException(StudentCodeException):
+    pass
 
 def compare_solutions(real_solution, student_solution):
+    # If we expect a 1D array and the student passes a 1D list, convert the student's list to a 1D array
+    expect_1d_array = type(real_solution) is np.ndarray and len(real_solution.shape) == 1
+    student_has_1d_list = type(student_solution) is list and all([not isinstance(item, (list, np.ndarray)) for item in student_solution])
+    if expect_1d_array and student_has_1d_list:
+        student_solution = np.array(student_solution, dtype=real_solution.dtype)
+
+    # Check that the types match
+    if type(real_solution) != type(student_solution):
+        raise StudentCodeException(f'Real solution for problem has type {type(real_solution)} but student solution has type {type(student_solution)}\n')
+
+    # Compare the two solutions
     if type(real_solution) is np.ndarray:
         return np.array_equal(real_solution, student_solution)
     elif type(real_solution) is bool:
         return real_solution == student_solution
     elif type(real_solution) is int or type(real_solution) is float or type(real_solution) is np.int32 or type(real_solution) is np.float32:
-        return abs(real_solution - student_solution) < .001
+        return abs(real_solution - student_solution) < 0.001
     elif type(real_solution) is list:
         return np.array_equal(real_solution, student_solution)
     elif type(real_solution) is tuple:
@@ -228,18 +136,18 @@ def compare_solutions(real_solution, student_solution):
         raise Exception(f'[Debug] Cannot grade type {type(real_solution)} for problem {funct_name}')
 
 
-def try_student_fn(student_fn, *args, **kwargs):
+def __try_student_fn__(student_fn, *args, **kwargs):
     try:
-        return wrapt_timeout_decorator.timeout(TIMEOUT_S, use_signals=True)(student_fn)(*args, **kwargs)
-    except TimeoutError as ex:
+        return wrapt_timeout_decorator.timeout(TIMEOUT_S, use_signals=True, timeout_exception=StudentTimeoutException)(student_fn)(*args, **kwargs)
+    except StudentTimeoutException as ex:
         return ex
     except OSError as ex:
-            return ex
+        return ex
     except Exception as ex:
         return ex
 
 
-def create_class_instance(constructor_fn, class_init_params):
+def __create_class_instance__(constructor_fn, class_init_params):
     if class_init_params:
         assert type(class_init_params) == dict, 'class_init_params must be kwargs dictionary'
         return constructor_fn(**class_init_params)
@@ -292,7 +200,6 @@ if __name__ == '__main__':
             to_remove.append((funct_name, funct))
         else:
             assert hasattr(funct, 'gen_fn_params'), f'[Debug] Not grading {funct_name} due to lack of annotation. Did you forget to annotate it?'
-            
 
     # Remove functions we do not want to grade
     for t in to_remove:
@@ -410,9 +317,6 @@ if __name__ == '__main__':
                         continue
 
                     # Grade the question by comparing all test cases
-                    # tc_builder: TestCaseBuilder = funct.meta['test_case_builder']
-                    # class_builder: ClassBuilder = funct.meta['class_builder']
-                    # custom_grader_builder: CustomGraderBuilder = funct.meta['custom_grader_builder']
                     is_class_fn = hasattr(funct, 'gen_class_params')
                     has_custom_equality_fn = hasattr(funct, 'equality_fn')
 
@@ -439,10 +343,10 @@ if __name__ == '__main__':
                             # IMPORTANT! Both classes must be initialized with the same parameters
                             # class_init_params = funct.meta['class_init_param_fn']()
                             class_init_params = funct.gen_class_params()
-                            solution_instance = create_class_instance(constructor_fn=classes_function_dict[funct_name], class_init_params=class_init_params)
+                            solution_instance = __create_class_instance__(constructor_fn=classes_function_dict[funct_name], class_init_params=class_init_params)
 
                             sys.stdout = None
-                            student_instance = try_student_fn(create_class_instance, constructor_fn=student_classes_function_dict[funct_name], class_init_params=class_init_params)
+                            student_instance = __try_student_fn__(__create_class_instance__, constructor_fn=student_classes_function_dict[funct_name], class_init_params=class_init_params)
                             sys.stdout = orig_stdout
 
                         p_bar.postfix += ' | Running Fn'
@@ -453,93 +357,69 @@ if __name__ == '__main__':
                             end_time = timer()
 
                             sys.stdout = None
-                            student_solution = try_student_fn(student_fn, student_instance, **student_test_case)
+                            student_solution = __try_student_fn__(student_fn, student_instance, **student_test_case)
                             sys.stdout = orig_stdout
                         else:
                             real_solution = funct(**real_test_case)
 
                             sys.stdout = None
-                            student_solution = try_student_fn(student_fn, **student_test_case)
+                            student_solution = __try_student_fn__(student_fn, **student_test_case)
                             sys.stdout = orig_stdout
 
                         # Check for student exceptions. If one test case has an exception, most likely the whole function is incorrect so we set a score of 0
                         if isinstance(student_solution, Exception):
-                            if isinstance(student_solution, TimeoutError):
-                                feedback.write(
-                                    f'\t[Test Case #{trial_idx+1}/{funct.max_trials}] Your solution took too long so it was terminated. As a reference, the TA function took {end_time - start_time:.10f}s, yours timed out with exception "{student_solution}"\n')
+                            if isinstance(student_solution, StudentTimeoutException):
+                                feedback.write(f'\t[Test Case #{trial_idx+1}/{funct.max_trials}] Your solution took too long so it was terminated. As a reference, the TA function took {end_time - start_time:.10f}s, yours timed out with exception "{student_solution}"\n')
                                 results.append(False)
                                 continue
                             else:
-                                import pdb
-                                pdb.set_trace()
                                 feedback.write(f'Got exception {student_solution} when running function {funct_name}. Assigning a grade of 0 \n')
                                 scores[funct_name] = 0
+                                results.append(False)
                                 break
 
+                        # Compare answers between solution and student
                         p_bar.postfix += ' | Checking equality'
-                        # Determine if we want to compare class instances instead of return types
-                        if is_class_fn and has_custom_equality_fn:
-                            r = funct.equality_fn(solution_instance, student_instance, real_solution, student_solution)
-                        # Determine if we want to check the equality of a specific parameter index #
-                        # elif type(funct.meta['equality_fn']) is int:
-                        #     if type(real_test_case) is tuple:
-                        #         param_idx = funct.meta['equality_fn']
-                        #         real_solution = real_test_case[param_idx]
-                        #         student_solution = student_test_case[param_idx]
-                        #     else:
-                        #         real_solution = real_test_case
-                        #         student_solution = student_test_case
+                        try:
+                            # Determine which comparison function we will be using
+                            if is_class_fn and has_custom_equality_fn:
+                                r = funct.equality_fn(solution_instance, student_instance, real_solution, student_solution)
+                            elif has_custom_equality_fn:
+                                r = funct.equality_fn(real_solution, student_solution)
+                            else:
+                                r = compare_solutions(real_solution, student_solution)
+                            results.append(r)
 
-                        # Convert types when it makes sense
-                        elif type(real_solution) is np.ndarray and type(student_solution) is list and len(real_solution.shape) == 1:
-                            student_solution = np.array(student_solution, dtype=real_solution.dtype)
+                            # Log failed test cases every 1/3 of the trials
+                            p_bar.postfix += ' | Logging'
+                            if not r and log_next_failed_case:
+                                log_next_failed_case = False
+                                solution_param_str = '' if real_test_case is None else real_test_case
+                                student_param_str = '' if student_test_case is None else student_test_case
 
-                        # Make sure the types match for both solutions
-                        elif type(real_solution) != type(student_solution):
-                            feedback.write(
-                                f'Real solution for problem {funct_name} has type {type(real_solution)} but student solution has type {type(student_solution)}, assigning a grade of 0 to this problem\n')
+                                # solution_output_str = custom_grader_builder.equality_fn if has_custom_equality_fn else real_solution
+                                # student_output_str = custom_grader_builder.equality_fn if has_custom_equality_fn else student_solution
+
+                                feedback.write(f'Test Case #{trial_idx+1} Failed\n')
+                                feedback.write(f'\t The Solution Outputs -> {funct_name}({solution_param_str}) = {real_solution}\n')
+                                feedback.write(f'\tYour Solution Outputs -> {funct_name}({student_param_str}) = {student_solution} \n')
+
+                                # Use our str function to print the student class
+                                if is_class_fn:
+                                    str_funct = solution_instance.__class__.__str__
+                                    feedback.write(f'\tTA Class = \n{solution_instance}\n')
+                                    feedback.write(f'\tYour Class = \n{str_funct(student_instance)}\n')
+                        except Exception as ex:
+                            feedback.write(f'Got exception {ex} when trying to grade function {funct_name} through comparing solutions with a custom equality function. Assigning a grade of 0 \n')
                             scores[funct_name] = 0
-                            results = []
+                            results.append(False)
                             break
 
-                        # Compare answers
-                        elif has_custom_equality_fn:
-                            r = funct.equality_fn(real_solution, student_solution)
-                        else:
-                            r = compare_solutions(real_solution, student_solution)
-
-                        # Log failed test cases every 1/3 of the test cases
-                        
-                        p_bar.postfix += ' | Logging'
-                        if not r and log_next_failed_case:
-                            log_next_failed_case = False
-                            solution_param_str = '' if real_test_case is None else real_test_case
-                            student_param_str = '' if student_test_case is None else student_test_case
-
-                            # solution_output_str = custom_grader_builder.equality_fn if has_custom_equality_fn else real_solution
-                            # student_output_str = custom_grader_builder.equality_fn if has_custom_equality_fn else student_solution
-
-                            feedback.write(f'Test Case #{trial_idx+1} Failed\n')
-                            feedback.write(f'\t The Solution Outputs -> {funct_name}({solution_param_str}) = {real_solution}\n')
-                            feedback.write(f'\tYour Solution Outputs -> {funct_name}({student_param_str}) = {student_solution} \n')
-
-                            # Use our str function to print the student class
-                            if funct_name in classes_function_dict:
-                                str_funct = solution_instance.__class__.__str__
-                                feedback.write(f'\tTA Class = \n{solution_instance}\n')
-                                feedback.write(f'\tYour Class = \n{str_funct(student_instance)}\n')
-
-                        results.append(r)
-
                     # Score test cases
-                    if len(results) > 0:
-                        passed_cases = np.sum(results)
-                        scores[funct_name] = (passed_cases / len(results))
-                    else:
-                        passed_cases = 0
-                        scores[funct_name] = 0
+                    passed_cases = np.sum(results)
+                    scores[funct_name] = (passed_cases / funct.max_trials)
 
-                    feedback.write(f'\tPassed {passed_cases}/{len(results)} test cases \n')
+                    feedback.write(f'\tPassed {passed_cases}/{funct.max_trials} test cases \n')
                     feedback.write(f'\tGrade = {scores[funct_name]*100:.0f}% \n')
 
             # Summarize
