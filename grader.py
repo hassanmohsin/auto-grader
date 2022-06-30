@@ -41,7 +41,7 @@ from timeit import default_timer as timer
 import wrapt_timeout_decorator
 
 TIMEOUT_S = 0.1  # How many seconds should we allow student functions to run before terminating them
-
+USE_MULTIPROCESSING = False
 
 def generate_custom_comparer(equality_fn):
     assert callable(equality_fn), 'equality_fn must be a function'
@@ -486,7 +486,15 @@ class Grader:
                 # IMPORTANT! Both classes must be initialized with the same parameters!
                 class_init_params = sol_fn.gen_class_params()
                 sol_instnc = self.create_class_instance(fn_name, **class_init_params)
-                stu_instnc = stu_code.create_class_instance(fn_name, **class_init_params)
+
+                try:
+                    stu_instnc = stu_code.create_class_instance(fn_name, **class_init_params)
+                except Exception as ex:
+                    test_case_results.append(False)
+
+                    stu_code.write_feedback(f'[{header}] Got exception [{ex}] when creating class {sol_instnc.__class__.__name__}. Stopping grading function early')
+                    stu_code.write_feedback(f'\t{traceback.format_exc()}\n')
+                    break
 
             # Check if we need to run the functions with an instance of a class or not
             # We also time the solution in seconds for logging later in case of student code timeouts
