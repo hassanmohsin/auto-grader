@@ -31,6 +31,8 @@ import traceback
 import copy
 import os
 import functools
+import multiprocessing
+import warnings
 
 import pandas as pd
 import numpy as np
@@ -41,7 +43,22 @@ from timeit import default_timer as timer
 import wrapt_timeout_decorator
 
 TIMEOUT_S = 0.1  # How many seconds should we allow student functions to run before terminating them
-USE_MULTIPROCESSING = False
+USE_MULTIPROCESSING = True  # Should we use multiple CPU cores to grade faster?
+
+# Terminal Colors (https://chrisyeh96.github.io/2020/03/28/terminal-colors.html)
+T_RED = '\033[91m'
+T_GREEN = '\033[92m'
+T_YELLOW = '\033[93m'
+T_BLUE = '\033[94m'
+T_MAGENTA = '\033[95m'
+T_CYAN = '\033[96m'
+
+T_RESET = '\033[0m'
+T_LIGHT_GREEN = '\033[92;1m'
+T_DARK_GREEN = '\033[92;2m'
+T_DARK_RED = '\033[91;2m'
+T_DARK_YELLOW = '\033[93;2m'
+
 
 def generate_custom_comparer(equality_fn):
     assert callable(equality_fn), 'equality_fn must be a function'
@@ -145,10 +162,53 @@ class StudentCode:
         if not self.feedback_dir.exists():
             self.feedback_dir.mkdir()
 
-    def write_feedback(self, msg):
-        """Writes feedback to the student output file."""
-        assert hasattr(self, 'feedback'), f'You must use the with statement when using this class'
-        self.feedback.write(f'{msg}\n')
+    def __enter__(self):
+        # Determine if it's a Blackboard bulk download file in the format
+        # {assignment name}_{student username}_attempt_{date}_{filename}
+        split_filename = self.fpath.stem.split('_')
+        is_bulk_blackboard = len(split_filename) >= 4
+
+        # If it's a Blackboard file, sort all attempts based on date and assign this attempt a simple number
+        # for the feedback output file. Otherwise make the feedback output file the same name as the attempt file
+        if is_bulk_blackboard:
+            student_name = split_filename[1]
+            date = split_filename[3]
+
+            # Gather and then sort all Blackboard attempts based on date
+            other_attempt_dates = []
+            for att_path in self.all_student_files:
+                split_att_path = att_path.stem.split('_')
+                if len(split_att_path) < 4 or split_att_path[1] != student_name:
+                    continue
+                other_attempt_dates.append(split_att_path[3])
+            other_attempt_dates = sorted(other_attempt_dates)
+
+            attempt_number = other_attempt_dates.index(date)+1
+
+            self.feedback_filename = f'{student_name}_attempt{attempt_number}.bbtxt'
+            self.student_name = f'{student_name}_{attempt_number}'
+            # print(f'[Auto-Grader] Grading {self.student_name} blackboard attempt {attempt_number} / {len(other_attempt_dates)}')
+        else:
+            self.feedback_filename = f'{self.fpath}.bbtxt'
+            self.student_name = f'{self.fpath.stem}'
+            # print(f'[Auto-Grader] Grading {self.student_name} attempt')
+
+        # Open the feedback file and progress bar
+        self.feedback = open(self.feedback_dir / self.feedback_filename, 'w')
+        self.p_bar = tqdm()
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self.write_feedback(f'[AutoGrader] Got {exc_type} {exc_val}, unable to proceed with grading')
+            self.write_feedback(exc_tb)
+            self.log(f'{T_MAGENTA}StudentCode() exit with exception {exc_type} [{exc_val}]{T_RESET}')
+
+        self.feedback.close()
+
+        self.p_bar.n = self.p_bar.total
+        self.p_bar.close()
 
     def import_module(self):
         """Imports the student module, its functions, and the class constructors."""
@@ -158,8 +218,8 @@ class StudentCode:
         os.chdir(self.fpath.parent)
         with SilenceOutput():
             try:
-                self.module = __import__(self.fpath.stem)
-                self.fns, self.constructors = Grader.get_module_functions(self.module)
+                module = __import__(self.fpath.stem)
+                self.fns, self.constructors = Grader.get_module_functions(module)
             except Exception as ex:
                 self.write_feedback(f'[AutoGrader] Could not import module due to exception {ex}')
                 self.write_feedback(traceback.format_exc())
@@ -168,6 +228,18 @@ class StudentCode:
         # Change the working directory back to its original state
         os.chdir(original_cwd)
         return import_exception
+
+    def write_feedback(self, msg):
+        """Writes feedback to the student output file."""
+        assert hasattr(self, 'feedback'), f'You must use the with statement when using this class'
+        self.feedback.write(f'{msg}\n')
+
+    def log(self, msg):
+        """Writes a log to the student progress bar"""
+        self.p_bar.desc = f'[{self.student_name}] {msg}'
+
+    def log_postfix(self, msg):
+        self.p_bar.postfix = f'{T_CYAN}{msg}{T_RESET}'
 
     def has_fn(self, fn_name):
         """Determines if the given function name is in the student code"""
@@ -209,47 +281,6 @@ class StudentCode:
         except Exception as ex:
             self.tb = traceback.format_exc()
             return ex
-
-    def __enter__(self):
-        # Determine if it's a Blackboard bulk download file in the format
-        # {assignment name}_{student username}_attempt_{date}_{filename}
-        split_filename = self.fpath.stem.split('_')
-        is_bulk_blackboard = len(split_filename) >= 4
-
-        # If it's a Blackboard file, sort all attempts based on date and assign this attempt a simple number
-        # for the feedback output file. Otherwise make the feedback output file the same name as the attempt file
-        if is_bulk_blackboard:
-            student_name = split_filename[1]
-            date = split_filename[3]
-
-            # Gather and then sort all Blackboard attempts based on date
-            other_attempt_dates = []
-            for att_path in self.all_student_files:
-                split_att_path = att_path.stem.split('_')
-                if len(split_att_path) < 4 or split_att_path[1] != student_name:
-                    continue
-                other_attempt_dates.append(split_att_path[3])
-            other_attempt_dates = sorted(other_attempt_dates)
-
-            attempt_number = other_attempt_dates.index(date)+1
-
-            self.feedback_filename = f'{student_name}_attempt{attempt_number}.bbtxt'
-            print(f'[Auto-Grader] Grading {student_name} blackboard attempt {attempt_number} / {len(other_attempt_dates)}')
-        else:
-            self.feedback_filename = f'{self.fpath}.bbtxt'
-            print(f'[Auto-Grader] Grading {self.fpath} attempt')
-
-        # Open the feedback file
-        self.feedback = open(self.feedback_dir / self.feedback_filename, 'w')
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is not None:
-            self.write_feedback(f'[AutoGrader] Got {exc_type} {exc_val}, unable to proceed with grading')
-            self.write_feedback(exc_tb)
-
-        print(f"\t*StudentCode() has exited | ExceptionType={exc_type} | Exception={exc_val}")
-        self.feedback.close()
 
 
 class Grader:
@@ -322,13 +353,13 @@ class Grader:
         os.chdir(self.solution_file.parent)
 
         # Import the solution file
-        self.solution_module = __import__(self.solution_file.stem)
+        sol_module = __import__(self.solution_file.stem)
 
         # Change the working directory back to its original state
         os.chdir(original_cwd)
 
         # Import functions
-        self.solution_fns, self.solution_constructors = self.get_module_functions(self.solution_module)
+        self.solution_fns, self.solution_constructors = self.get_module_functions(sol_module)
 
         # Check that we didn't forget to annotate a function
         # and also remove functions we do not want to grade
@@ -344,15 +375,20 @@ class Grader:
             del self.solution_fns[t]
             print(f'[Debug] Not grading {t}')
 
-        # Create dataframe where we will keep track of student scores
         print(f"[Debug] Grading {len(self.solution_fns)} functions | {self.solution_fns.keys()}")
-        self.df = pd.DataFrame(columns=['student'] + [fname for (fname) in self.solution_fns.keys()])
 
     def convert_student_jupyter_to_py(self):
         """Converts all student Jupyter notebooks into regular code files"""
+        # First create a directory to place the notebooks after conversion
+        notebook_dir = self.student_dir / 'jupyter_notebooks'
+
+        if not notebook_dir.exists():
+            notebook_dir.mkdir()
+
         for fpath in self.student_dir.glob("*.ipynb"):
             # If the file has already been converted skip it (don't convert it again!)
             if fpath.with_suffix(".py").exists():
+                fpath.rename(notebook_dir / fpath.name)
                 continue
 
             print(f"[Auto-Grader] Converting jupyter notebook {fpath.stem} into regular code")
@@ -362,6 +398,9 @@ class Grader:
             output_fpath = fpath.with_suffix(".txt")
             assert output_fpath.exists(), f'[Debug] Converted Jupyter file {output_fpath} could not be found'
             output_fpath.rename(output_fpath.with_suffix('.py'))
+
+            # Move the notebook
+            fpath.rename(notebook_dir / fpath.name)
 
     def grade_all_students(self):
         """Grades all students in the given student directory"""
@@ -390,33 +429,54 @@ class Grader:
 
             all_student_files = temp_student_files
 
-        # Grade the students
-        for fpath in all_student_files:
-            with StudentCode(self.student_dir, fpath, all_student_files) as stu_code:
-                import_exception = stu_code.import_module()
-                if import_exception:
-                    print(f'\t*Could not import student module due to exception "{import_exception}"')
-                else:
-                    self.grade_one_student(stu_code)
+        self.all_student_files = all_student_files
+
+        # Grade all students, suppressing their code warnings for cleaner output
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+
+            all_scores = []
+            if not USE_MULTIPROCESSING:
+                for fpath in all_student_files:
+                    stu_scores = self.grade_one_student(fpath)
+                    all_scores.append(stu_scores)
+            else:
+                # TODO: Make this a command-line argument?
+                cpu_cores = 8
+                with multiprocessing.Pool(cpu_cores) as pool:
+                    all_scores = pool.map(self.grade_one_student, all_student_files)
 
         # Create summary file
+        self.df = pd.DataFrame.from_records(all_scores)
         print("Creating summary file with scores per problem")
         print(self.df)
         self.df.to_excel(self.summary_path, index=False)
 
-    def grade_one_student(self, stu_code: StudentCode):
+    def grade_one_student(self, fpath):
         """Grades all functions of a given student."""
-        # We will keep track of all problem grades in this dictionary
-        scores = {'student': stu_code.feedback_filename}
-        total_score = 0
+        with StudentCode(self.student_dir, fpath, self.all_student_files) as stu_code:
+            # Open a progress bar for visualization in the command-line
+            stu_code.log(f'Importing module')
+            stu_code.p_bar.total = len(self.solution_fns.keys())
 
-        # Open a progress bar for visualization in the command-line
-        with tqdm(total=len(self.solution_fns.keys())) as p_bar:
+            # We will keep track of all problem grades in this dictionary
+            scores = {fn_name: 0 for fn_name in self.solution_fns.keys()}
+            scores['student'] = stu_code.student_name
+
+            # We will keep track of the total score from all problems in this int
+            total_score = 0
+
+            # Try to import the student's code
+            import_exception = stu_code.import_module()
+            if import_exception:
+                stu_code.log(f'{T_MAGENTA}Import exception [{import_exception}]{T_RESET}')
+                return scores
+
             # Go through all functions in the solution
-            for fn_name, sol_fn in self.solution_fns.items():
-                p_bar.update()
-                p_bar.desc = f'Grading {fn_name}'
-                stu_code.write_feedback(f'******************** [AutoGrader] Grading {fn_name} ********************')
+            for idx, (fn_name, sol_fn) in enumerate(self.solution_fns.items()):
+                stu_code.p_bar.update()
+                stu_code.log(f'Grading [{idx+1}/{len(self.solution_fns.keys())}], fn="{fn_name}"')
+                stu_code.write_feedback(f'******************** [AutoGrader] Grading fn="{fn_name}" ********************')
 
                 # Check if the student actually has the function
                 if not stu_code.has_fn(fn_name):
@@ -425,27 +485,26 @@ class Grader:
                     continue
 
                 # Grade the function
-                scores[fn_name] = self.grade_one_function(fn_name, sol_fn, p_bar, stu_code)
+                scores[fn_name] = self.grade_one_function(fn_name, sol_fn, stu_code)
                 total_score += scores[fn_name]
 
-        # Summarize scores
-        stu_code.write_feedback(f'\n ** Summary of all problem scores = \n\n \t{scores}\n')
+            # Summarize scores
+            stu_code.write_feedback(f'\n ** Summary of all problem scores = \n\n \t{scores}\n')
 
-        # Update dataframe
-        self.df = pd.concat([self.df, pd.DataFrame([scores])], ignore_index=True)
+            # Compute final score out as an integer between 0 and 1
+            # TODO: Currently all problems are evenly weighted, perhaps we should allow the annotation to set the weight
+            final_score = total_score / len(self.solution_fns.keys())
+            color = T_RED if final_score < 0.7 else T_YELLOW if final_score < 0.8 else T_DARK_GREEN if final_score < 0.9 else T_GREEN
 
-        # Compute final score out as an integer between 0 and 1
-        # TODO: Currently all problems are evenly weighted, perhaps we should allow the annotation to set the weight
-        final_score = total_score / len(self.solution_fns.keys())
+            # Convert the final score to the scale passed by the user
+            final_score = final_score * self.max_grade
 
-        # Convert the final score to the scale passed by the user
-        final_score = final_score * self.max_grade
+            # Log final scores
+            stu_code.write_feedback(f'Final grade = {final_score:.2f}/{self.max_grade}')
+            stu_code.log(f'Final grade = {color}{final_score:.2f}/{self.max_grade}{T_RESET}')
+            return scores
 
-        # Log final scores
-        stu_code.write_feedback(f'Final grade = {final_score:.2f}/{self.max_grade}')
-        print(f'\t*Student received {final_score:.2f}/{self.max_grade}')
-
-    def grade_one_function(self, fn_name, sol_fn, p_bar: tqdm, stu_code: StudentCode):
+    def grade_one_function(self, fn_name, sol_fn, stu_code: StudentCode):
         """Runs all test cases and grades the provided function for one specific student."""
         # Gather the metadata provided by the decorators
         is_class_fn = hasattr(sol_fn, 'gen_class_params')
@@ -457,7 +516,7 @@ class Grader:
         log_next_failed_case = True
 
         # Extend progress bar and keep track of test case results
-        p_bar.total += n_trials
+        stu_code.p_bar.total += n_trials
         test_case_results = []
 
         # How many exceptions we will allow before stopping the trials
@@ -465,23 +524,21 @@ class Grader:
 
         for trial_idx in range(n_trials):
             header = f'Test Case #{trial_idx+1}/{n_trials}'
-            p_bar.update()
-            p_bar.postfix = header
+            stu_code.p_bar.update()
+            stu_code.log_postfix(header)
 
             # Check if we need to log the next failed test case
             if trial_idx % log_freq == 0:
                 log_next_failed_case = True
 
-            # Generate function parameters
+            # Generate function parameters. We give the student a deep copy
+            # to decouple references which is important for some exercises
             sol_params = sol_fn.gen_fn_params()
-            stu_params = sol_params
+            stu_params = copy.deepcopy(sol_params)
 
             # Create a new class instance every X iterations of the function we are testing when testing class functions
             if is_class_fn and trial_idx % sol_fn.trials_per_instance == 0:
-                p_bar.postfix = f'{header} | Creating classes'
-                # Decouple parameter references
-                # TODO: Determine if this needs to be done every single time or only for classes
-                stu_params = copy.deepcopy(sol_params)
+                stu_code.log_postfix(f'{header} | Creating classes')
 
                 # IMPORTANT! Both classes must be initialized with the same parameters!
                 class_init_params = sol_fn.gen_class_params()
@@ -490,15 +547,13 @@ class Grader:
                 try:
                     stu_instnc = stu_code.create_class_instance(fn_name, **class_init_params)
                 except Exception as ex:
-                    test_case_results.append(False)
-
                     stu_code.write_feedback(f'[{header}] Got exception [{ex}] when creating class {sol_instnc.__class__.__name__}. Stopping grading function early')
                     stu_code.write_feedback(f'\t{traceback.format_exc()}\n')
                     break
 
             # Check if we need to run the functions with an instance of a class or not
             # We also time the solution in seconds for logging later in case of student code timeouts
-            p_bar.postfix = f'{header} | Running fns'
+            stu_code.log_postfix(f'{header} | Running fns')
             if is_class_fn:
                 start_t = timer()
                 sol_output = sol_fn(sol_instnc, **sol_params)
@@ -527,13 +582,12 @@ class Grader:
                 # Stop running test cases when patience runs out. If patience remains, continue to the next test case
                 if n_exception_patience <= 0:
                     stu_code.write_feedback(f'# Stopping grading function early due to repeated exceptions')
-                    p_bar.n = p_bar.total
                     break
                 else:
                     continue
 
             # Compare answers between the solution and the student
-            p_bar.postfix = f'{header} | Checking equality'
+            stu_code.log_postfix(f'{header} | Checking equality')
             try:
                 # Determine which comparison function we will be using
                 if is_class_fn and has_custom_equality_fn:
@@ -547,12 +601,10 @@ class Grader:
             except Exception as ex:
                 stu_code.write_feedback(f'### Got exception {ex} when grading {fn_name} when trying to compare outputs. Stopping grading early')
                 stu_code.write_feedback(traceback.format_exc())
-                test_case_results.append(False)
-                p_bar.n = p_bar.total
                 break
 
             # Log failed test cases after a certain amount of iterations
-            p_bar.postfix = f'{header} | Logging'
+            stu_code.log_postfix(f'{header} | Logging')
             if not has_passed_test and log_next_failed_case:
                 log_next_failed_case = False
 
@@ -562,9 +614,9 @@ class Grader:
 
                 # Use our str function to print the student class
                 if is_class_fn:
-                    str_funct = sol_instnc.__class__.__str__
+                    str_fn = sol_instnc.__class__.__str__
                     stu_code.write_feedback(f'\tSolution Class = \n{sol_instnc}')
-                    stu_code.write_feedback(f'\tYour Class = \n{str_funct(stu_instnc)}\n')
+                    stu_code.write_feedback(f'\tYour Class = \n{str_fn(stu_instnc)}\n')
 
         # Once all trials are completed, we compute the score between 0 and 1
         n_passed_cases = np.sum(test_case_results)
@@ -642,10 +694,14 @@ if __name__ == '__main__':
     # 4. Convert jupyter .ipynb notebooks to .py files
     # 5. Grade all student code files
     print(f'Grading {args.solution} with student code located at {args.student_dir}')
+
+    start_time = timer()
     grader = Grader(pathlib.Path(args.solution), pathlib.Path(args.student_dir), args.max_grade, args.students)
     grader.override_libraries()
     grader.import_solution()
     grader.convert_student_jupyter_to_py()
     grader.grade_all_students()
+    end_time = timer()
 
-    print("Finished grading!")
+    # No multiprocessing = 5.91s
+    print(f'Finished grading! Grading took {end_time - start_time:.2f}s')
