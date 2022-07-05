@@ -1,7 +1,6 @@
-from io import TextIOWrapper
+from grader.student_code import StudentCode
 
-
-def parse_py_file(input_fpath):
+def parse_py_file(stu_code: StudentCode):
     """Parses .py files and extracts only classes and functions.
 
     Does not keep comments or empty lines.
@@ -10,10 +9,14 @@ def parse_py_file(input_fpath):
 
     Limitations:
         * Does not currently support classes within classes (could be implemented in parse_class() function)
+
     """
     output_lines = []
-    with open(input_fpath, 'r') as file:
+    class_dict = {}
+    fn_dict = {}
+    with open(stu_code.fpath, 'r') as file:
         lines = file.readlines()
+        total_n_lines = len(lines)
         while len(lines) > 0:
             line = lines.pop(0)
 
@@ -27,19 +30,33 @@ def parse_py_file(input_fpath):
 
             # Top-Level Classes
             if line.find('class') == 0:
-                output_lines.append(line)
-
                 class_spaces = __count_indentation__(line)
-                output_lines.extend(__parse_class__(lines, class_spaces))
+                key = line.strip().replace('\n', '')
+
+                if key in class_dict.keys():
+                    stu_code.write_feedback(f'[Parser] Found duplicate class [{key}], only keeping the 1st one in line {class_dict[key]}')
+                    __parse_class__(None, lines, total_n_lines, class_spaces)
+                    continue
+                else:
+                    class_dict[key] = total_n_lines - len(lines)
+                    output_lines.append(line)
+                    output_lines.extend(__parse_class__(stu_code, lines, total_n_lines, class_spaces))
 
             # Top-Level Functions
             if line.find('def') == 0:
-                output_lines.append(line)
-
                 fn_spaces = __count_indentation__(line)
-                output_lines.extend(__parse_function__(lines, fn_spaces))
+                key = line.strip().replace('\n', '')
 
-    with open(input_fpath, 'w') as file:
+                if key in fn_dict.keys():
+                    stu_code.write_feedback(f'[Parser] Found duplicate top-level function [{key}], only keeping the 1st one in line {fn_dict[key]}')
+                    __parse_function__(lines, fn_spaces)
+                    continue
+                else:
+                    fn_dict[key] = total_n_lines - len(lines)
+                    output_lines.append(line)
+                    output_lines.extend(__parse_function__(lines, fn_spaces))
+
+    with open(stu_code.fpath, 'w') as file:
         file.writelines(output_lines)
 
 
@@ -54,19 +71,31 @@ def __count_indentation__(line: str):
     return len(line) - len(line.lstrip(' '))
 
 
-def __parse_class__(lines: list, class_spaces: int):
+def __parse_class__(stu_code: StudentCode, lines: list, total_n_lines, class_spaces: int):
     output_lines = []
 
+    fn_dict = {}
     while len(lines) > 0:
         line = lines.pop(0)
+
+        if __is_comment_or_empty__(line):
+            continue
         n_spaces = __count_indentation__(line)
 
         # Look for functions
         if line.find('def', n_spaces) != -1:
-            output_lines.append(line)
+            key = line.strip().replace('\n', '')
+            if key in fn_dict.keys():
+                if stu_code:
+                    stu_code.write_feedback(f'[Parser] Found function [{key}], only keeping the 1st one in line {fn_dict[key]}')
+                __parse_function__(lines, n_spaces)
+                continue
+            else:
+                fn_dict[key] = total_n_lines - len(lines)
+                output_lines.append(line)
 
-            # Find the indentation of the "def" line
-            output_lines.extend(__parse_function__(lines, n_spaces))
+                # Find the indentation of the "def" line
+                output_lines.extend(__parse_function__(lines, n_spaces))
         else:
             # It's not a function so check if we un-indented, if so, rewind file
             n_spaces = __count_indentation__(line)
@@ -87,12 +116,11 @@ def __parse_function__(lines: list, fn_spaces: int):
 
     while len(lines) > 0:
         line = lines.pop(0)
-        n_spaces = __count_indentation__(line)
-
         # Ignore comments and empty lines
         if __is_comment_or_empty__(line):
             continue
 
+        n_spaces = __count_indentation__(line)
         # Check if we un-indented and are outside of the function
         if n_spaces <= fn_spaces:
             lines.insert(0, line)

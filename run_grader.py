@@ -17,6 +17,7 @@
 #   * You cannot use underscores in the titles of the Blackboard assignments
 #   * Cannot grade class initializers (__init__ functions)
 #   * Can only grade top-level functions and top-level classes, no classes within classes or anything like that
+#   * Does not currently support comparing of print() statements (It could be done, but it's just easier if you make the students return a string)
 # Notes:
 #   * If you want students to see their mistakes more easily implement the __str__() and __repr__() functions for your classes
 #   * Features command-line colors!

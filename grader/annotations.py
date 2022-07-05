@@ -1,9 +1,9 @@
 import functools
 
 def generate_custom_comparer(equality_fn):
-    assert callable(equality_fn), 'equality_fn must be a function'
-
     def decorator(func):
+        assert callable(equality_fn), f'[Debug] Error while annotating function "{func.__name__}" [{equality_fn} must be a function]'
+        # TODO: Check that the parameter count matches the one used in grader
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -14,9 +14,6 @@ def generate_custom_comparer(equality_fn):
 
 
 def generate_class(trials_per_instance, **class_kwargs):
-    assert type(trials_per_instance) == int, 'trials_per_instance must be an int'
-    for k_name, k_val in class_kwargs.items():
-        assert callable(k_val), f'[Debug] class_builder variable {k_name} has to be a function'
 
     def __gen_class_params__():
         params = {}
@@ -25,6 +22,9 @@ def generate_class(trials_per_instance, **class_kwargs):
         return params
 
     def decorator(func):
+        assert type(trials_per_instance) == int, f'[Debug] Error while annotating class function "{func.__name__}" [{trials_per_instance} must be an int]'
+        for k_name, k_val in class_kwargs.items():
+            assert callable(k_val), f'[Debug] Error while annotating class function "{func.__name__}" ["{k_name}" has to be a function, did you forget to include lambda?]'
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -37,10 +37,6 @@ def generate_class(trials_per_instance, **class_kwargs):
 
 
 def generate_test_case(trials=2500, **fn_kwargs):
-    assert type(trials) == int, 'trials must be an int'
-    assert trials > 0, 'trials must be positive'
-    for k_name, k_fn in fn_kwargs.items():
-        assert callable(k_fn), f'[Debug] test_case_builder variable {k_name} has to be a function'
 
     def __gen_fn_params__():
         params = {}
@@ -49,6 +45,11 @@ def generate_test_case(trials=2500, **fn_kwargs):
         return params
 
     def decorator(func):
+        assert type(trials) == int, f'[Debug] Error while annotating function "{func.__name__}" [{trials} must be an int]'
+        assert trials > 0, f'[Debug] Error while annotating function "{func.__name__}" [{trials} must be greater than 0]'
+        for k_name, k_fn in fn_kwargs.items():
+            assert callable(k_fn), f'[Debug] Error while annotating function "{func.__name__}" ["{k_name}" has to be a function, did you forget to include lambda?]'
+        
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)

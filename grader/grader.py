@@ -14,9 +14,54 @@ from timeit import default_timer as timer
 
 
 from grader.student_code import StudentCode, StudentTimeoutException, TIMEOUT_S
-from grader.utils import get_module_functions, compare_solutions, Colors
+from grader.utils import get_module_functions, Colors
 from grader.code_parser import parse_py_file
 
+def __convert_dtype_to_regular_type__(np_type):
+    if isinstance(np_type, (np.integer, np.unsignedinteger)):
+        return int(np_type)
+    elif isinstance(np_type, (np.inexact, np.floating)):
+        return float(np_type)
+    else:
+        return np_type
+
+def compare_outputs(real_output, student_output):
+    """Compares the given outputs and determines if they are equal."""
+    # If we expect a 1D array and the student passes a 1D list, convert the student's list to a 1D array
+    expect_1d_array = type(real_output) is np.ndarray and len(real_output.shape) == 1
+    student_has_1d_list = type(student_output) is list and all([not isinstance(item, (list, np.ndarray)) for item in student_output])
+    if expect_1d_array and student_has_1d_list:
+        student_output = np.array(student_output, dtype=real_output.dtype)
+
+    # Convert numpy dtypes to regular types
+    real_output = __convert_dtype_to_regular_type__(real_output)
+    student_output = __convert_dtype_to_regular_type__(student_output)
+
+    # Check that the types match
+    if type(real_output) != type(student_output):
+        # raise StudentCodeException(f'Real solution for problem has type {type(real_solution)} but student solution has type {type(student_solution)}\n')
+        return False
+
+    # Compare the two solutions
+    if type(real_output) is np.ndarray:
+        return np.array_equal(real_output, student_output)
+    elif type(real_output) is bool:
+        return real_output == student_output
+    elif type(real_output) is int or type(real_output) is float or type(real_output) is np.int32 or type(real_output) is np.float32:
+        return abs(real_output - student_output) < 0.001
+    elif type(real_output) is list:
+        return np.array_equal(real_output, student_output)
+    elif type(real_output) is tuple:
+        L = []
+        for real_item, student_item in zip(real_output, student_output):
+            L.append(compare_outputs(real_item, student_item))
+        return all(L)
+    elif type(real_output) is dict or type(real_output) is set:
+        return real_output == student_output
+    elif real_output is None:
+        return student_output is None
+    else:
+        raise Exception(f'[Debug] Cannot grade type {type(real_output)}')
 
 class Grader:
     def __init__(self, args):
@@ -183,10 +228,11 @@ class Grader:
 
     def grade_one_student(self, fpath: pathlib.Path):
         """Grades all functions of a given student."""
-        # First we want to clean the code
-        parse_py_file(fpath)
 
         with StudentCode(self.student_dir, fpath, self.all_student_files) as stu_code:
+            # First we want to clean the code
+            parse_py_file(stu_code)
+
             # Open a progress bar for visualization in the command-line
             stu_code.log(f'Importing module')
             stu_code.p_bar.total = len(self.solution_fns.keys())
@@ -324,11 +370,11 @@ class Grader:
             try:
                 # Determine which comparison function we will be using
                 if is_class_fn and has_custom_equality_fn:
-                    has_passed_test = sol_fn.equality_fn(sol_instnc, stu_instnc, sol_output, stu_output)
+                    has_passed_test = sol_fn.equality_fn(sol_instnc, stu_instnc, sol_output, stu_output, sol_params, stu_params)
                 elif has_custom_equality_fn:
-                    has_passed_test = sol_fn.equality_fn(sol_output, stu_output)
+                    has_passed_test = sol_fn.equality_fn(sol_output, stu_output, sol_params, stu_params)
                 else:
-                    has_passed_test = compare_solutions(sol_output, stu_output)
+                    has_passed_test = compare_outputs(sol_output, stu_output)
                 # Add pass/fail result to the total list
                 test_case_results.append(has_passed_test)
             except Exception as ex:
