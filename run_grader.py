@@ -13,9 +13,10 @@
 # ██████████ by Jose G. Perez <DeveloperJose> ███████████████████████████████████████████████████████████████████████████████████████████████████████████
 # ██████████████ Last Modified: 07/05/2022 ██████████████████████████████████████████████████████████████████████████████████████████████████████████████
 # Limitations:
-#   * Requires a Linux machine for the timeout functionality.
+#   * Requires a Linux machine when grading for the timeout functionality
 #   * You cannot use underscores in the titles of the Blackboard assignments
 #   * Cannot grade class initializers (__init__ functions)
+#   * Students cannot use global variables
 #   * Can only grade top-level functions and top-level classes, no classes within classes or anything like that
 #   * Does not currently support comparing of print() statements (It could be done, but it's just easier if you make the students return a string)
 # Notes:
@@ -33,6 +34,7 @@
 #   TODO: Allow each problem to have its own max_score
 #   TODO: Allow each problem to set its weight relative to the final score
 #   TODO: Allow each problem to pass timeout_s instead of defining a single one
+#   TODO: Allow for extra credit
 import pathlib
 import argparse
 import zipfile

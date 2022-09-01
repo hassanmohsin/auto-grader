@@ -30,11 +30,15 @@ def get_module_functions(module):
     fns = dict(inspect.getmembers(module, inspect.isfunction))
 
     # Get the classes if any and extract their functions
+    # TODO: Remove imported classes
     classes = inspect.getmembers(module, inspect.isclass)
     constructors = {}
 
     # print(f"[Debug] Inspected classes = {classes}")
+    ignored = {'tqdm', 'scipy'}
     for class_name, class_obj in classes:
+        if class_name in ignored:
+            continue
         for orig_fn_name, fn in inspect.getmembers(class_obj, inspect.isfunction):
             # Combine class name with function name to use as key for dictionary
             fn_name = f'{class_name}.{orig_fn_name}()'

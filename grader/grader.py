@@ -22,6 +22,8 @@ def __convert_dtype_to_regular_type__(np_type):
         return int(np_type)
     elif isinstance(np_type, (np.inexact, np.floating)):
         return float(np_type)
+    elif isinstance(np_type, (np.str_)):
+        return str(np_type)
     else:
         return np_type
 
@@ -49,6 +51,8 @@ def compare_outputs(real_output, student_output):
         return real_output == student_output
     elif type(real_output) is int or type(real_output) is float or type(real_output) is np.int32 or type(real_output) is np.float32:
         return abs(real_output - student_output) < 0.001
+    elif type(real_output) is str:
+        return real_output == student_output
     elif type(real_output) is list:
         return np.array_equal(real_output, student_output)
     elif type(real_output) is tuple:
@@ -180,7 +184,7 @@ class Grader:
     def grade_all_students(self):
         """Grades all students in the given student directory"""
         # Find all the student code files
-        stu_files = sorted(list(self.student_dir.glob("*.py")))
+        stu_files = list(self.student_dir.glob("*.py"))
 
         # If the --student parameter is passed in the command-line, grade only those students
         if self.students:
@@ -204,7 +208,11 @@ class Grader:
 
             stu_files = temp_student_files
 
-        self.all_student_files = sorted(stu_files)
+        self.all_student_files = set(stu_files)
+        discard = set(['bst', 'btree', 'graph', 'dsf', 'min_heap'])
+        for fpath in list(self.all_student_files):
+            if fpath.stem in discard:
+                self.all_student_files.discard(fpath)
 
         # Grade all students, suppressing their code warnings for cleaner output
         with warnings.catch_warnings():
@@ -235,7 +243,8 @@ class Grader:
 
             # Open a progress bar for visualization in the command-line
             stu_code.log(f'Importing module')
-            stu_code.p_bar.total = len(self.solution_fns.keys())
+            # stu_code.p_bar.total = len(self.solution_fns.keys())
+            stu_code.p_bar.total = 100
 
             # We will keep track of all problem grades in this dictionary
             scores = {fn_name: 0 for fn_name in self.solution_fns.keys()}
@@ -253,7 +262,7 @@ class Grader:
 
             # Go through all functions in the solution
             for idx, (fn_name, sol_fn) in enumerate(self.solution_fns.items()):
-                stu_code.p_bar.update()
+                # stu_code.p_bar.update()
                 stu_code.log(f'Grading [{idx+1}/{len(self.solution_fns.keys())}], fn="{fn_name}"')
                 stu_code.write_feedback(f'******************** [AutoGrader] Grading fn="{fn_name}" ********************')
 
@@ -291,11 +300,12 @@ class Grader:
         n_trials: int = sol_fn.max_trials
 
         # Log detailed failed cases every 1/3rd of the trials
-        log_freq = n_trials // 3
+        log_freq = max(1, n_trials // 3)
         log_next_failed_case = True
 
         # Extend progress bar and keep track of test case results
-        stu_code.p_bar.total += n_trials
+        stu_code.p_bar.total = n_trials
+        stu_code.p_bar.n = 0
         test_case_results = []
 
         # How many exceptions we will allow before stopping the trials
@@ -346,6 +356,58 @@ class Grader:
 
                 stu_output = stu_code.run_fn(fn_name, **stu_params)
 
+            # TODO: Improve this
+            def type_to_str(output):
+                if type(output) is list and len(output) > 20:
+                    return f'[{output[0]}, {output[1]}, ... ({len(output)-4} more items), {output[-2]}, {output[-1]}]'
+                elif type(output) is dict and len(output) > 20:
+                    return '{' + f'{len(output.keys())} dict items...' + '}'
+                elif type(output) is set and len(output) > 20:
+                    return '{' + f'{len(output)} set items...' +'}'
+                else:
+                    return str(output)
+
+
+            def params_to_str(params):
+                output = ''
+                for key, param in params.items():
+                    output += f'{key}: {type_to_str(param)}, '
+                return output[:-2]
+
+            def output_to_str(output_all):
+                if type(output_all) is tuple:
+                    s = ''
+                    for output in output_all:
+                        s += type_to_str(output) + ', '
+                    return '(' + s[:-2] + ')'
+                else:
+                    return type_to_str(output_all)
+
+            def diff_to_str(sol_output, stu_output):
+                if type(sol_output) != type(stu_output):
+                    if hasattr(sol_output, '__class__'):
+                        sol_str = sol_output.__class__.__str__
+                        # return f'Difference: Solution={sol_output} vs Student={sol_str(stu_output)}'
+                        return f'Difference: The classes are not equivalent'
+                    else:
+                        return f'Difference: Types are different (Solution={type(sol_output)} vs Student={type(stu_output)}'
+                if type(sol_output) is set:
+                    return f'Difference: Items in solution but not in student = {sol_output.difference(stu_output)}, item in student but not in solution = {stu_output.difference(sol_output)}'
+                elif type(sol_output) is list:
+                    if len(sol_output) != len(stu_output):
+                        return f'Difference: Lists are not the same length (Solution={len(sol_output)} vs Student={len(stu_output)})'
+                    
+                    s = 'Difference: '
+                    idxs = []
+                    for idx, (sol_item, stu_item) in enumerate(zip(sol_output, stu_output)):
+                        if sol_item != stu_item:
+                            idxs.append(idx)
+                            # s += f'(IDX={idx}, Solution={sol_item}, Student={stu_item}), '
+                    rand_idx = np.random.choice(idxs)
+                    return f'Difference: There are [{len(idxs)}] indices that do not match. Let us see a random one -> IDX={rand_idx}, Solution[IDX] = {sol_output[rand_idx]}, Student[IDX] = {stu_output[rand_idx]}'
+                else:
+                    return ''
+
             # Check for exceptions
             if isinstance(stu_output, Exception):
                 n_exception_patience -= 1
@@ -355,7 +417,7 @@ class Grader:
                     stu_code.write_feedback(f'[{header}] Your code took too long to run so it was timed out and stopped. Remaining exceptions allowed = {n_exception_patience}')
                     stu_code.write_feedback(f'\tAs a reference, the solution took {end_t - start_t:.6f}s to run. The time limit is {TIMEOUT_S}s \n')
                 else:
-                    stu_code.write_feedback(f'[{header}] Got exception "{stu_output}" when running function {fn_name}({stu_params}). Remaining exceptions allowed = {n_exception_patience}')
+                    stu_code.write_feedback(f'[{header}] Got exception [{stu_output}] when running function {fn_name}({params_to_str(stu_params)}). Remaining exceptions allowed = {n_exception_patience}')
                     stu_code.write_feedback(f'\t{stu_code.tb}\n')
 
                 # Stop running test cases when patience runs out. If patience remains, continue to the next test case
@@ -388,8 +450,9 @@ class Grader:
                 log_next_failed_case = False
 
                 stu_code.write_feedback(f'{header} failed')
-                stu_code.write_feedback(f'\t The Solution Outputs -> {fn_name}({sol_params})={sol_output}')
-                stu_code.write_feedback(f'\tYour Solution Outputs -> {fn_name}({stu_params})={stu_output}\n')
+                stu_code.write_feedback(f'\t The Solution Outputs -> {fn_name}({params_to_str(sol_params)})={output_to_str(sol_output)}')
+                stu_code.write_feedback(f'\tYour Solution Outputs -> {fn_name}({params_to_str(stu_params)})={output_to_str(stu_output)}\n')
+                stu_code.write_feedback(f'\t{diff_to_str(sol_output, stu_output)}')
 
                 # Use our str function to print the student class
                 if is_class_fn:

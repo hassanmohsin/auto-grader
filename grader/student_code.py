@@ -8,7 +8,7 @@ import wrapt_timeout_decorator
 
 from grader.utils import get_module_functions, Colors
 
-TIMEOUT_S = 0.1  # How many seconds should we allow student functions to run before terminating them
+TIMEOUT_S = 8#0.1  # How many seconds should we allow student functions to run before terminating them
 
 
 class StudentTimeoutException(Exception):
@@ -80,9 +80,9 @@ class StudentCode:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None:
-            self.write_feedback(f'[AutoGrader] Got {exc_type} {exc_val}, unable to proceed with grading')
-            self.write_feedback(exc_tb)
-            self.log(f'{Colors.T_MAGENTA}StudentCode() exit with exception {exc_type} [{exc_val}]{Colors.T_RESET}')
+            self.write_feedback(f'[AutoGrader: StudentCode] Got exception type [{exc_type}] with value [{exc_val}], unable to proceed with grading')
+            self.write_feedback(traceback.format_tb(exc_tb))
+            self.log(f'{Colors.T_MAGENTA}StudentCode() exited with exception {exc_type} [{exc_val}]{Colors.T_RESET}')
 
         self.feedback.close()
 
@@ -111,7 +111,14 @@ class StudentCode:
     def write_feedback(self, msg):
         """Writes feedback to the student output file."""
         assert hasattr(self, 'feedback'), f'You must use the with statement when using this class'
-        self.feedback.write(f'{msg}\n')
+
+        n_bytes = self.feedback.tell()
+        bytes_in_mb = 1e6
+        mb_max = 10
+        if n_bytes < mb_max * bytes_in_mb:
+            self.feedback.write(f'{msg}\n')
+        else:
+            raise Exception(f'[Debug] Student {self.student_name} has more than {mb_max}MBs of feedback')
 
     def log(self, msg):
         """Writes a log to the student progress bar"""
