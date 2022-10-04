@@ -171,12 +171,12 @@ class Grader:
             return
 
         print(f"[Auto-Grader] Converting jupyter notebook {fpath.stem} into regular code")
-        subprocess.call(['jupyter', 'nbconvert', '--to', 'script', str(fpath)])
+        subprocess.call(['jupyter', 'nbconvert', '--to', 'python', str(fpath)])
 
         # Rename from .txt to .py
-        output_fpath = fpath.with_suffix(".txt")
-        assert output_fpath.exists(), f'[Debug] Converted Jupyter file {output_fpath} could not be found'
-        output_fpath.rename(output_fpath.with_suffix('.py'))
+        # output_fpath = fpath.with_suffix(".txt")
+        # assert output_fpath.exists(), f'[Debug] Converted Jupyter file {output_fpath} could not be found'
+        # output_fpath.rename(output_fpath.with_suffix('.py'))
 
         # Move the notebook
         fpath.rename(self.notebook_dir / fpath.name)
@@ -286,7 +286,8 @@ class Grader:
 
             # Convert the final score to the scale passed by the user
             final_score = final_score * self.max_grade
-
+            scores["final_grade"] = final_score
+            
             # Log final scores
             stu_code.write_feedback(f'Final grade = {final_score:.2f}/{self.max_grade}')
             stu_code.log(f'Final grade = {color}{final_score:.2f}/{self.max_grade}{Colors.T_RESET}')
@@ -452,6 +453,7 @@ class Grader:
                 stu_code.write_feedback(f'{header} failed')
                 stu_code.write_feedback(f'\t The Solution Outputs -> {fn_name}({params_to_str(sol_params)})={output_to_str(sol_output)}')
                 stu_code.write_feedback(f'\tYour Solution Outputs -> {fn_name}({params_to_str(stu_params)})={output_to_str(stu_output)}\n')
+                #TODO: Should not print the following when the return type does not matter
                 stu_code.write_feedback(f'\t{diff_to_str(sol_output, stu_output)}')
 
                 # Use our str function to print the student class
